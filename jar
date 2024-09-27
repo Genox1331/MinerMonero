@@ -1,0 +1,114 @@
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+
+public class XMRigInstaller {
+
+    private static final String XMRIG_URL = "https://github.com/xmrig/xmrig/releases/download/v6.19.2/xmrig-6.19.2-msvc-win64.zip";
+    private static final String DEST_DIR = "C:/xmrig";
+    private static final String WALLET_ADDRESS = "48xaUrbb4Fka1TTxgZNPi9MmE26fAzEENKcqWNnH9fNMbU3jRZ3MM6nFzvp26ULMKcNa3dd5h12G82qdAQGRLsN9Do3ZpFs";
+    private static final String POOL_URL = "pool.supportxmr.com:3333";
+
+    public static void main(String[] args) {
+        try {
+            downloadFile(XMRIG_URL, "xmrig.zip");
+            unzip("xmrig.zip", DEST_DIR);
+
+            String xmrigPath = DEST_DIR + "/xmrig-6.19.2/xmrig.exe";
+            String[] command = {xmrigPath, "-o", POOL_URL, "-u", WALLET_ADDRESS, "-p", "x"};
+
+            startMining(command);
+
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void downloadFile(String fileURL, String savePath) throws IOException {
+        URL url = new URL(fileURL);
+        HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();
+        int responseCode = httpConn.getResponseCode();
+
+        if (responseCode == HttpURLConnection.HTTP_OK) {
+            InputStream inputStream = httpConn.getInputStream();
+            FileOutputStream outputStream = new FileOutputStream(savePath);
+
+            int bytesRead;
+            byte[] buffer = new byte[4096];
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+
+            outputStream.close();
+            inputStream.close();
+            System.out.println("Файл скачан: " + savePath);
+        } else {
+            System.out.println("Не удалось скачать файл. Код ответа: " + responseCode);
+        }
+        httpConn.disconnect();
+    }
+
+    private static void unzip(String zipFilePath, String destDir) throws IOException {
+        File dir = new File(destDir);
+        if (!dir.exists()) dir.mkdirs();
+
+        FileInputStream fis = new FileInputStream(zipFilePath);
+        ZipInputStream zis = new ZipInputStream(fis);
+        ZipEntry entry;
+
+        while ((entry = zis.getNextEntry()) != null) {
+            File newFile = newFile(dir, entry);
+            if (entry.isDirectory()) {
+                newFile.mkdirs();
+            } else {
+                FileOutputStream fos = new FileOutputStream(newFile);
+                byte[] buffer = new byte[1024];
+                int len;
+                while ((len = zis.read(buffer)) > 0) {
+                    fos.write(buffer, 0, len);
+                }
+                fos.close();
+            }
+        }
+        zis.closeEntry();
+        zis.close();
+        fis.close();
+
+        System.out.println("Архив распакован: " + destDir);
+    }
+
+    private static File newFile(File destDir, ZipEntry zipEntry) throws IOException {
+        File destFile = new File(destDir, zipEntry.getName());
+
+        String destDirPath = destDir.getCanonicalPath();
+        String destFilePath = destFile.getCanonicalPath();
+
+        if (!destFilePath.startsWith(destDirPath + File.separator)) {
+            throw new IOException("Выход за пределы целевой директории: " + zipEntry.getName());
+        }
+
+        return destFile;
+    }
+
+    private static void startMining(String[] command) {
+        try {
+            ProcessBuilder processBuilder = new ProcessBuilder(command);
+            processBuilder.redirectErrorStream(true);
+            Process process = processBuilder.start();
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                System.out.println(line);
+            }
+
+            int exitCode = process.waitFor();
+            System.out.println("Майнинг завершен с кодом: " + exitCode);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
